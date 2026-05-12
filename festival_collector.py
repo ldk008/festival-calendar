@@ -20,7 +20,7 @@ PINTEREST_BOARD  = os.environ.get("PINTEREST_BOARD_ID", "")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ── 한국관광공사 Tour API ─────────────────────────────────
-API_URL = "https://apis.data.go.kr/B551011/KorService1/searchFestival1"
+API_URL = "https://apis.data.go.kr/B551011/KorService1/searchFestival2"
 
 def fetch_festivals(page=1, rows=100):
     """한국관광공사 행사/축제 목록 조회"""
