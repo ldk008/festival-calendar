@@ -19,29 +19,37 @@ PINTEREST_BOARD  = os.environ.get("PINTEREST_BOARD_ID", "")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ── 전국문화축제표준데이터 API ────────────────────────────
-API_URL = "https://api.data.go.kr/openapi/tn_pubr_public_cltur_fstvl_api"
+# ── 한국관광공사 Tour API ─────────────────────────────────
+API_URL = "https://apis.data.go.kr/B551011/KorService1/searchFestival1"
 
 def fetch_festivals(page=1, rows=100):
-    """전국문화축제표준데이터 조회"""
+    """한국관광공사 행사/축제 목록 조회"""
+    today = datetime.now().strftime("%Y%m%d")
     params = {
-        "serviceKey": TOUR_API_KEY,
-        "pageNo":     page,
-        "numOfRows":  rows,
-        "type":       "json",
+        "serviceKey":     TOUR_API_KEY,
+        "MobileOS":       "ETC",
+        "MobileApp":      "FestivalCalendar",
+        "_type":          "json",
+        "eventStartDate": today,
+        "arrange":        "A",
+        "numOfRows":      rows,
+        "pageNo":         page,
     }
 
     resp = requests.get(API_URL, params=params, timeout=15)
     resp.raise_for_status()
     data = resp.json()
 
-    items = data.get("response", {}).get("body", {}).get("items", [])
-    total = int(data.get("response", {}).get("body", {}).get("totalCount", 0))
+    items = data.get("response", {}).get("body", {}).get("items", {})
+    if not items:
+        return [], 0
 
-    if isinstance(items, dict):
-        items = [items]
+    item_list = items.get("item", [])
+    if isinstance(item_list, dict):
+        item_list = [item_list]
 
-    return items or [], total
+    total = int(data["response"]["body"]["totalCount"])
+    return item_list, total
 
 
 def fetch_all_festivals():
@@ -69,27 +77,24 @@ def upsert_festivals(items):
     new_festivals = []
 
     for item in items:
-        # 전국문화축제표준데이터 필드명
-        festival_id = str(item.get("fstvlNm", "") + item.get("fstvlStartDate", "")).replace(" ", "_")
+        # 관광공사 Tour API 필드명
+        festival_id = str(item.get("contentid", ""))
         if not festival_id:
             continue
 
-        # 날짜 형식 변환: 2025-05-01 → 20250501
-        start = item.get("fstvlStartDate", "").replace("-", "")
-        end   = item.get("fstvlEndDate",   "").replace("-", "")
-        addr  = item.get("rdnmadr", "") or item.get("lnmadr", "")
+        addr  = item.get("addr1", "")
         area  = addr.split(" ")[0] if addr else ""
 
         row = {
-            "id":          festival_id[:200],
-            "title":       item.get("fstvlNm", "").strip(),
-            "start_date":  start,
-            "end_date":    end,
+            "id":          festival_id,
+            "title":       item.get("title", "").strip(),
+            "start_date":  item.get("eventstartdate", ""),
+            "end_date":    item.get("eventenddate", ""),
             "area":        area,
             "sigungu":     addr,
-            "place":       item.get("fstvlPlace", addr),
-            "image_url":   item.get("imageUrl", ""),
-            "detail_url":  item.get("homepageUrl", "") or f"https://www.google.com/search?q={item.get('fstvlNm','')}",
+            "place":       addr,
+            "image_url":   item.get("firstimage", "") or item.get("firstimage2", ""),
+            "detail_url":  f"https://korean.visitkorea.or.kr/detail/ms_detail.do?cotid={festival_id}",
             "pinned_to_pinterest": False,
         }
 
